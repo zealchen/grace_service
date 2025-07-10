@@ -2,7 +2,6 @@ import os
 import asyncio
 import boto3
 import click
-import json
 import copy
 import gradio as gr
 from typing import List
@@ -11,7 +10,7 @@ import util
 from botocore.client import Config
 from googleapiclient.discovery import build
 
-API_KEY = 'AIzaSyCGSIxn2T11d8cqgXH3V7CWFk9-8nkbLQU'
+API_KEY = ''
 YOUTUBE_CLIENT = build('youtube', 'v3', developerKey=API_KEY)
 
 
@@ -19,7 +18,7 @@ REGION = 'us-east-1'
 SESSION = boto3.Session(profile_name="default", region_name=REGION)
 custom_config = Config(connect_timeout=840, read_timeout=840)
 CLIENT = SESSION.client('bedrock-runtime', config=custom_config)
-modelARN_DEEPSEEK_R1_V1 = 'arn:aws:bedrock:us-east-1:471112955155:inference-profile/us.deepseek.r1-v1:0'
+modelARN_DEEPSEEK_R1_V1 = ''
 
 
 AI_EXTRACT_PROMPT = f"""Human:
