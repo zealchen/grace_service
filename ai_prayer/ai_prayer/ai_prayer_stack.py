@@ -81,7 +81,7 @@ class AiPrayerStack(Stack):
         ))
         lambda_role.add_to_policy(iam.PolicyStatement(
             actions=["bedrock:InvokeModel"],
-            resources=["*"]  # Replace with specific model ARN later
+            resources=["*"]
         ))
 
         unified_lambda = _lambda.DockerImageFunction(
@@ -100,7 +100,8 @@ class AiPrayerStack(Stack):
                 "RECIPIENT_EMAIL": '|'.join(app_config['receive_emails']),
                 "LOOKBACK_DAYS": "365",
                 "ELEVENLABS_API_KEY": app_config['elevenlab_api_key'],
-                "BEDROCK_MODEL_ID": "anthropic.claude-v2",
+                "OPENAI_API_KEY": app_config['openai_api_key'],
+                "BEDROCK_MODEL_ID": "arn:aws:bedrock:us-east-1:905418107398:inference-profile/us.deepseek.r1-v1:0", 
                 "PRAYER_REQUEST_QUEUE_URL": prayer_request_queue.queue_url,
                 "SEND_EMAIL": app_config['send_email'],
             },

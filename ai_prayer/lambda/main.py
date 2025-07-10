@@ -3,9 +3,12 @@ import boto3
 import json
 import tempfile
 import logging
+import openai
+from pathlib import Path
 from datetime import datetime, timedelta
 import urllib.parse
 from elevenlabs.client import ElevenLabs
+from llm import invoke_model
 LOGGER = logging.getLogger()
 LOGGER.setLevel(logging.INFO)
 
@@ -118,10 +121,12 @@ def prayer_generation_process(event):
     prayers_bucket_name = os.environ["PRAYERS_BUCKET_NAME"]
     lookback_days = int(os.environ["LOOKBACK_DAYS"])
     elevenlabs_api_key = os.environ["ELEVENLABS_API_KEY"]
+    openai_api_key = os.environ["OPENAI_API_KEY"]
     bedrock_model_id = os.environ["BEDROCK_MODEL_ID"]
     send_email = os.environ["SEND_EMAIL"]
 
-    elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
+    # elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
+    openai_client = openai.OpenAI(api_key=openai_api_key)
     
     # 1. Read user's feelings from DynamoDB
     dynamodb_client = boto3.resource("dynamodb")
@@ -140,6 +145,8 @@ def prayer_generation_process(event):
     )
     
     feelings = [item["feeling"] for item in response.get("Items", [])]
+    if not feelings:
+        return {"statusCode": 200, "body": f"no feelings found for {recipient_email}"}
     
     # 2. Generate a prayer using Bedrock
     bedrock_runtime_client = boto3.client("bedrock-runtime")
@@ -147,36 +154,26 @@ def prayer_generation_process(event):
     prompt = f"""
     Based on the following recent feelings and activities from the past year: {', '.join(feelings)}.
 
-    Please generate a deep, reflective, and personal prayer. The prayer should be structured to last for approximately 3 minutes when spoken aloud at a calm, meditative pace. This means the prayer should be around 450 to 500 words long.
-
-    The prayer should have a clear structure:
-    1.  **Opening:** Start with a salutation and a moment of gratitude, acknowledging the user's recent state of mind.
-    2.  **Reflection:** Elaborate on the feelings and activities provided. Explore potential themes, challenges, or blessings hidden within these experiences. If there are struggles, offer words of comfort and strength. If there are joys, express gratitude and celebration.
-    3.  **Petition/Aspiration:** Make a request for guidance, peace, wisdom, or strength for the day or night ahead, directly related to the user's life.
-    4.  **Closing:** End with a concluding thought, a blessing, or a traditional closing.
-
-    The tone should be comforting, empathetic, and uplifting.
+    Please generate a deep, reflective, and personal prayer. 
+    The prayer should be structured to last for approximately 2 - 3 minutes when spoken aloud at a calm, meditative pace. 
+    This means the prayer should be around 250 to 300 words long. The output prayer shall be in one single paragraph without titles.
     """
-    
-    body = json.dumps({
-        "prompt": f"\n\nHuman:{prompt}\n\nAssistant:",
-        "max_tokens_to_sample": 800,
-    })
-
-    response = bedrock_runtime_client.invoke_model(
-        body=body, modelId=bedrock_model_id
-    )
-    
-    prayer_text = json.loads(response.get("body").read()).get("completion")
+    LOGGER.info(f'prompt: {prompt}')
+    prayer_text = invoke_model(bedrock_runtime_client, bedrock_model_id, prompt, max_tokens=800)
 
     # 3. Convert the prayer to audio using ElevenLabs
-    audio = elevenlabs_client.text_to_speech.convert(
-        text=prayer_text,
-        voice_id="A9evEp8yGjv4c3WsIKuY",
-        model_id="eleven_multilingual_v2",
-        output_format="mp3_44100_128",
+    # audio = elevenlabs_client.text_to_speech.convert(
+    #     text=prayer_text,
+    #     voice_id="A9evEp8yGjv4c3WsIKuY",
+    #     model_id="eleven_multilingual_v2",
+    #     output_format="mp3_44100_128",
+    # )
+    # audio_bytes = b"".join(audio)
+    instruction = (
+        "Speak as if you are God speaking directly to a beloved child—"
+        "with deep authority, infinite compassion, and peaceful pace, "
+        "and a voice that is both awe-inspiring and calming."
     )
-    audio_bytes = b"".join(audio)
     
     # 4. Store the audio in S3
     s3_client = boto3.client("s3")
@@ -185,8 +182,13 @@ def prayer_generation_process(event):
     
     with tempfile.TemporaryDirectory() as temp_dir:
         audio_path = os.path.join(temp_dir, file_name)
-        with open(audio_path, "wb") as f:
-            f.write(audio_bytes)
+        with openai_client.audio.speech.with_streaming_response.create(
+            model="tts-1-hd",
+            voice="onyx",
+            input=prayer_text,
+            instructions=instruction,
+        ) as response:
+            response.stream_to_file(audio_path)
         s3_client.upload_file(audio_path, prayers_bucket_name, s3_key, ExtraArgs={
             "ContentType": "audio/mp3",
             "ContentDisposition": "inline"
