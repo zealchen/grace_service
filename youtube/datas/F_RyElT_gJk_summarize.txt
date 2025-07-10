@@ -1,0 +1,35 @@
+# Summary: The Emergence of AI Coding Agents and Best Practices
+
+## Key Debate on AI Coding Agents
+- **Skeptics vs. Advocates**: Notable developers like Jonathan Blow (creator of *Braid*) criticize AI coding agents as overhyped, while others (e.g., Eric S. Raymond, Jesse Friselle) argue they significantly aid non-expert developers.
+- **Spectrum of Use**: Effectiveness varies based on skill level—agents are more impactful for average developers than "top 1%" coders.
+
+## Evolution of AI Tools
+1. **Chatbot Era (2022-2023)**: Tools like ChatGPT focused on text completion and Q&A interactions.
+2. **Agentic Era (2024+)**: New models enable autonomous agents that execute tasks (e.g., code edits) without micromanagement. Design shifts include:
+   - **Direct File Edits**: Agents make changes without constant user approval.
+   - **Minimal UI**: Shift from complex interfaces (e.g., VS Code forks) to simple CLI/text-box interactions.
+   - **Tighter Model Integration**: Agents rely deeply on specific LLMs, making model-swapping harder.
+
+## Demo: AMP Coding Agent
+- **Task**: Customize an icon for a Linear integration in a production codebase.
+- **Process**:
+  - AMP autonomously searched issues, read code, wrote tests, and applied fixes.
+  - Used sub-agents for context-aware searches and feedback loops (e.g., Playwright for UI testing).
+  - **Result**: Successfully updated icons across admin/settings pages by plumbing config data securely.
+
+## Power User Insights
+1. **Detailed Prompts**: Long, context-rich instructions yield better results than vague queries.
+2. **Feedback Loops**: Integrate tools (e.g., Storybook, linters) for rapid validation.
+3. **Parallel Execution**: Run multiple agents for different tasks (e.g., code review, implementation).
+4. **Onboarding & Code Reviews**: Agents accelerate understanding of complex codebases and streamline PR reviews via summaries.
+
+## Key Takeaways
+- **High-Ceiling Skill**: Mastering agents requires practice, akin to learning a new IDE or language.
+- **Human Responsibility**: Agents augment (but don’t replace) developers—code quality remains the user’s duty.
+- **Future Trends**: Composability (Unix-like tools) and cost-efficiency (vs. human time) will drive adoption.
+
+> *"Agents are not a vehicle to TL;DR code. Use them to become 10–100x more effective, not less engaged."*  
+— Bang, CTO of Source Graph
+
+**Try AMP**: Available via VS Code extension or CLI. Free credits at Source Graph’s booth!

@@ -1,0 +1,70 @@
+# Workshop Summary: Intro to Graph Databases with Neo4j and AI Integration
+
+## **Setup Instructions**
+- **Access Links**: Participants with numbers ≤160 use Link 1, ≥2011 use Link 2.
+- **Credentials**: Username/password = `attendee<number>` (lowercase).
+- **Environment**: Clone GitHub repo, copy `WS.env` for database/OpenAI keys.
+- **Visualization**: Use Neo4j Browser Preview for graph exploration.
+
+---
+
+## **Workshop Modules**
+
+### **1. Graph Basics with Cypher**
+- **Data Loading**: 
+  - Structured CSV data (people ↔ skills) loaded into Neo4j.
+  - Constraints created for `Person(email)` and `Skill(name)`.
+- **Key Queries**:
+  - `MATCH` patterns for relationships (e.g., `(p:Person)-[:KNOWS]->(s:Skill)`).
+  - Multihop queries (e.g., finding people with shared skills).
+- **Graph Analytics**:
+  - **Leiden Algorithm**: Community detection to group people by skill clusters.
+  - **Vector Search**: Embedding skills via OpenAI for semantic similarity.
+
+### **2. Unstructured Data Processing**
+- **Entity Extraction**:
+  - Use Pydantic models + OpenAI to parse résumés into structured data.
+  - Example: Extract `Person` and `Skill` nodes from text bios.
+- **Integration**: Load extracted entities into Neo4j using Cypher.
+
+### **3. Building an Agent with LangChain**
+- **Tools Created**:
+  1. **Retrieve Skills**: Fetch skills for a person.
+  2. **Find Similar Skills**: Vector search + semantic relationships.
+  3. **Find Similar People**: Hybrid scoring (skill overlap + semantic similarity).
+  4. **Recommend People by Skills**: Vector search → graph traversal.
+- **Agent Workflow**:
+  - Tools bound to OpenAI model using LangChain’s `create_react_agent`.
+  - Dynamic Cypher generation using schema annotations for complex queries.
+
+---
+
+## **Key Concepts**
+- **Why Graphs?**:
+  - Combine symbolic (graph traversals) and subsymbolic (vector search) AI.
+  - Improve retrieval accuracy and explainability for agentic workflows.
+- **Data Modeling**:
+  - Nodes as entities (e.g., `Person`, `Skill`), relationships as verbs (e.g., `KNOWS`).
+  - Simpler schemas aid dynamic query generation by LLMs.
+- **Advanced Techniques**:
+  - **Community Detection**: Leiden algorithm for skill-based employee segmentation.
+  - **Hybrid Queries**: Blend vector search with graph traversals (e.g., variable-length hops).
+
+---
+
+## **Tools & Resources**
+- **Neo4j Browser**: Visualize graphs and run Cypher queries.
+- **LangChain**: Agent framework for tool integration.
+- **GitHub Repo**: Code, data, and environment setup [provided in workshop](https://github.com/neo4j/graph-rag-workshop).
+- **Further Learning**:
+  - Neo4j Aura Free Trial for cloud databases.
+  - Advanced workshops on graph analytics and MCP integrations.
+
+---
+
+## **Q&A Highlights**
+- **Data Modeling**: Balance simplicity for agents vs. complexity for performance.
+- **Agent Tools**: Predefined expert tools (e.g., skill retrieval) improve reliability.
+- **Cost vs. Performance**: Hosting vectors in Neo4j reduces latency but consider existing infra (e.g., Postgres).
+
+*Workshop materials available in the `#workshop-graph-intro` Slack channel.*

@@ -1,0 +1,47 @@
+# Summary: Building an MCP Server for Enterprise AI Integration
+
+## Overview
+David Kramer, founder of Sentry, shares insights on implementing **Machine Control Protocol (MCP)** in the context of enterprise SaaS. MCP is framed as a **pluggable architecture for AI agents**, enabling integration with tools like VS Code and Cursor to enhance developer workflows (e.g., bug fixing). The talk emphasizes practical challenges, design considerations, and the future of agent-driven systems.
+
+---
+
+## Key Points
+
+### 1. **What is MCP?**
+   - A protocol for connecting AI agents to external services via APIs.
+   - Focuses on **remote interfaces** (not standard I/O) for enterprise cloud services.
+   - Example: Sentry’s MCP allows developers to query/fix bugs directly in code editors like VS Code.
+
+### 2. **Implementation Challenges**
+   - **OAuth 2.1 Complexity**: Most companies lack native support, requiring workarounds (e.g., Cloudflare Workers for token handling).
+   - **Client Compatibility**: Tools like VS Code Insiders and Cursor are early adopters but unstable; enterprise integrations are still maturing.
+   - **Cost & Token Limits**: Poorly designed APIs can lead to expensive, inefficient AI queries (e.g., 20 API calls for a single task).
+
+### 3. **Design Considerations**
+   - **Avoid Raw OpenAPI Exposure**: 
+     - AI agents struggle with unstructured JSON. Use **Markdown** for human/machine-readable context.
+     - Example: Sentry returns bug data in Markdown to simplify AI parsing.
+   - **Error Messaging**: Design errors as actionable feedback for both humans and AI.
+   - **Context Optimization**: Tailor responses to minimize token usage and cost.
+
+### 4. **Agents Over APIs**
+   - **MCP ≠ API Proxy**: Treat agents as standalone services, not just API wrappers.
+   - **Control & Iteration**: Build agents to manage workflows (e.g., Sentry’s root-cause analysis agent "Seir"), even if MCP lacks features like streaming.
+   - **Security**: Avoid untrusted MCP tools; prioritize OAuth for B2B SaaS.
+
+### 5. **Future Outlook**
+   - **Agent-Centric Workflows**: The real value lies in agents that orchestrate tasks across services (e.g., fixing bugs in-editor).
+   - **Accessibility**: Despite complexity, MCP is achievable with modern tools (e.g., Cloudflare Workers for OAuth shims).
+
+---
+
+## Takeaways
+- **For B2B SaaS**: Focus on **remote MCP servers** with OAuth; avoid local/standard I/O.
+- **Prioritize Context**: Design data formats (like Markdown) for AI readability.
+- **Iterate Continuously**: MCP integrations require ongoing tweaks (e.g., Sentry updates its MCP weekly).
+- **Agents > APIs**: Invest in agent architectures to retain control over costs, prompts, and outcomes.
+
+---
+
+**Final Note**:  
+"Don’t be intimidated by buzzwords. MCP is just a new label for service-oriented architecture. Start small, leverage existing tools, and iterate." – David Kramer

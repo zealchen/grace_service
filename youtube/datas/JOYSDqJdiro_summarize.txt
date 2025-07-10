@@ -1,0 +1,50 @@
+# Manis: The New AI Agent Platform Shaking Up the Industry
+
+## 🌟 Key Innovations
+- **Multi-Agent Architecture**: Functions like an executive team with specialized sub-agents:
+  - *Planner Agent* creates master plans for task decomposition
+  - 29+ integrated tools for web navigation, code execution, and file analysis
+  - *Executor Agent* synthesizes final outputs
+- **Core Technology**:
+  - Dynamic task decomposition algorithm
+  - Chain of Thought Injection for stable multi-step reasoning
+  - Built on Anthropic's Claude 3.5 Sonnet + open-source tools (YC Browser, E2B sandbox)
+
+## 🚀 Capabilities
+- **Practical Applications**:
+  - Travel planning
+  - Financial analysis
+  - Educational content creation
+  - Insurance policy comparisons
+  - Supplier sourcing
+- **Benchmark Performance**:
+  - Scores **86.5%** on Gaia benchmark (vs. human 92%, OpenAI 74%)
+  - Excels in reasoning, web browsing, and tool use
+
+## 🤔 RAG vs Rappers Debate
+- **Manis as "Rapper"**:
+  - Integrates existing models/tools rather than developing new base models
+  - Similar to successful products like Cursor (code) and Harvey (legal tech)
+- **Key Differentiators**:
+  - Transparent file system access
+  - User-customizable sub-agents
+  - $2/task cost (vs competitors)
+  - Multi-agent orchestration
+
+## ⚖️ Strengths & Limitations
+- **Advantages**:
+  - Lower operational costs
+  - Greater user control/transparency
+  - Rapid deployment potential
+- **Challenges**:
+  - Scaling complexity with task difficulty
+  - Vulnerability to API pricing changes
+  - Replicable UX improvements
+
+## 💡 Strategic Insights for AI Startups
+1. Focus on **proprietary evaluations** hard to replicate
+2. Embed workflows into **specific user routines**
+3. Leverage **unique platform/data integrations**
+4. Prioritize **user experience** over model development
+
+> "Success in AI doesn't hinge on reinventing the wheel, but on who can stitch existing models into products users love."

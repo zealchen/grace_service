@@ -1,0 +1,69 @@
+# Vibe Coding with AI: Best Practices and Tips from YC
+
+## Overview
+Tom from YC shares insights on "vibe coding" – using AI tools to accelerate development while maintaining software engineering best practices. The approach combines AI efficiency with professional coding techniques.
+
+## Key Takeaways
+- **AI as a Collaborative Tool**: Treat AI as a "new programming language" requiring clear context and iterative refinement.
+- **Rapid Evolution**: Best practices change weekly as models improve; experimentation is key.
+- **Beyond Code**: AI can handle DevOps, design, and documentation tasks.
+
+---
+
+## Founder Tips for AI Coding
+1. **Tool Stacking**:
+   - Use multiple AI tools (e.g., Cursor for speed, Windsurf for depth) simultaneously.
+   - Cross-check outputs by running the same prompt across tools.
+2. **Test-First Approach**:
+   - Manually write high-level integration tests first, then let AI generate code.
+3. **Architecture First**:
+   - Spend significant time planning scope/architecture with pure LLMs before coding.
+4. **Rabbit Hole Detection**:
+   - Reset and reassess if AI gets stuck in loops or makes unrelated changes.
+
+---
+
+## Tom's Vibe Coding Framework
+### **1. Planning Phase**
+- Create a detailed markdown plan with AI:
+  - Mark features as "Won't Do" or "Later"
+  - Implement section-by-section, committing to Git after each
+
+### **2. Implementation**
+- **Version Control**: `git reset --hard` frequently to avoid "code crust"
+- **Testing**:
+  - Focus on end-to-end user flow tests (not unit tests)
+  - Use tests as regression guards against AI's random changes
+- **Debugging**:
+  - Paste raw error messages directly into AI
+  - Add logging and try different models (Claude Sonnet 3.7 vs. Gemini vs. GPT)
+
+### **3. Advanced Techniques**
+- **Documentation**: Localize API docs in project folders for AI access
+- **Learning**: Have AI explain its code line-by-line for knowledge transfer
+- **Modularity**:
+  - Build complex features as standalone projects first
+  - Prefer service-based architectures with clear API boundaries
+
+### **4. Non-Coding AI Use**
+- DevOps (Heroku/DNS setup)
+- Design (favicon generation/resizing)
+- Voice coding via tools like Aqua (140WPM voice→code)
+
+---
+
+## Stack Recommendations
+- **High Success**: Ruby on Rails (conventional patterns → better AI output)
+- **Emerging**: Rust/Elixir (less data, but improving)
+- **Visual Tools**: Screenshot inputs for UI bugs/design inspiration
+
+---
+
+## Current Model Landscape (as of recording)
+- **Planning**: Gemini
+- **Implementation**: Claude Sonnet 3.7
+- **Codebase Analysis**: GPT-4 (still evolving)
+
+---
+
+**Final Tip**: Refactor aggressively with AI – keep files small and modular. The best practices today might be obsolete next month; stay curious!

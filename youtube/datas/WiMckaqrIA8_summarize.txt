@@ -1,0 +1,53 @@
+# Building an Autonomous AI Video Agent: Step-by-Step Guide
+
+## 🎯 Core Objective
+Create an AI system that automatically recreates viral YouTube Shorts by analyzing and emulating popular content trends.
+
+## 🔧 Key Components & Workflow
+
+### 1. **Content Analysis**
+- **YouTube Data API**: 
+  - Fetches top 10 most-viewed shorts from last 7 days
+  - Extracts video URLs for processing
+
+### 2. **AI Video Understanding**
+- **Gemini 1.5 Pro**:
+  - Analyzes YouTube URLs to extract scene structures
+  - Generates descriptive image prompts for each scene
+  - Outputs JSON with scene breakdowns and recreation prompts
+
+### 3. **Visual Generation**
+- **Imagen (Google)**:
+  - Creates images from text prompts
+  - Maintains character/style consistency across scenes
+- **Cling 2.1**:
+  - Generates 5-second video clips from images+prompts
+  - Anime style applied for creative reinterpretation
+
+### 4. **Assembly & Output**
+- Combines generated clips with background music
+- Creates final short video compilation
+
+## 🛠️ Technical Setup
+- **Required APIs**:
+  - YouTube Data API
+  - Google Gemini API
+  - FoulAI (for video generation)
+- **Environment**:
+  - Python project in Cloud Code
+  - API keys management through .env file
+
+## 💡 Key Insights & Results
+- **Scene Optimization**: Reduced 34 original scenes → 5 core scenes for efficiency
+- **Demo Outcome**:
+  - Successfully recreated scene structure from original short
+  - Anime-style reinterpretation showed creative potential
+  - Quality limitations highlight need for iterative improvements
+
+## 🚀 Pro Tips
+- Use Cloud Code/Cursor for rapid prototyping
+- Start with free Gemini CLI before scaling
+- Maintain character consistency across prompts
+- Experiment with different visual styles
+
+> 💡 **Course Promotion**: Presenter offers [AI Video Course](https://aivideocourse.com) with new module on viral content strategies and passive income opportunities through AI video creation.

@@ -1,0 +1,50 @@
+# Summary: "The 12 Factors of AI Agents" Talk
+
+## Key Challenges in Agent Development
+- **70-80% Quality Barrier**: Initial prototypes often fail to meet production reliability standards.
+- **Over-Engineering Pitfalls**: Not every problem requires an agent (e.g., a bash script might suffice for DevOps tasks).
+- **Framework Limitations**: Over-reliance on frameworks can obscure critical control flow and prompt engineering.
+
+---
+
+## Core Principles for Building Reliable Agents (12 Factors Highlighted)
+
+### 🛠️ **Factor 1: Structured Outputs**
+- LLMs excel at converting natural language into structured formats (e.g., JSON). This is foundational for agentic workflows.
+
+### 🚫 **Factor 4: "Tool Use is Harmful"**
+- Tools are not magical abstractions; they’re deterministic code driven by structured LLM outputs. Avoid overcomplicating tool interactions.
+
+### 🔄 **Factor 8: Own Your Control Flow**
+- **Loop Management**: Explicitly control agent loops (start, pause, resume) instead of relying on naive infinite loops.
+- **State Management**: Separate execution state (e.g., retry counts) from business state (e.g., user data) for reliability.
+
+### 📝 **Factor 2: Own Your Prompts**
+- **Prompt Engineering**: High-quality prompts are critical. Treat them as code—optimize every token for clarity and intent.
+- **Context Window Design**: Curate context density (e.g., summarize errors instead of dumping stack traces).
+
+### 🤖 **Factor 10: Small Focused Agents**
+- **Micro-Agents**: Use agents for *specific* tasks within deterministic workflows (e.g., approval steps in CI/CD pipelines).
+- **Example**: A deployment bot handles approvals via Slack, then hands off to deterministic code for testing.
+
+### 🔗 **Human-Agent Collaboration**
+- **Natural Language Triggers**: Let LLMs decide when to involve humans (e.g., "Need clarification" vs. "Done").
+- **Meet Users Where They Are**: Integrate agents into existing channels (Slack, Email, SMS).
+
+---
+
+## Critical Takeaways
+1. **Agents Are Just Software**: Build them with standard engineering practices (switch statements, loops, APIs).
+2. **LLMs as Stateless Functions**: Reliability depends on input context quality. Engineer tokens meticulously.
+3. **Own the Hard Parts**: Frameworks should handle boilerplate; focus on optimizing prompts, control flow, and context.
+4. **Bleeding Edge Wins**: Push LLMs to their reliable limits, then engineer around gaps (e.g., human-in-the-loop steps).
+
+---
+
+## Resources & Call to Action
+- **GitHub Repo**: [12-Factor Agents](https://github.com/12-factor-agents) (4k+ stars, 14 contributors).
+- **A2 Protocol**: Standardizing agent-human collaboration (mentioned in closing).
+- **Create 12-Factor Agent**: Scaffolding tool for owning agent code (analogous to shadcn).
+
+> *"The best agents are built by focusing on the hard AI problems—prompts, tokens, and control flow—not hiding behind frameworks."*  
+— Speaker (Founder, Human Layer)
