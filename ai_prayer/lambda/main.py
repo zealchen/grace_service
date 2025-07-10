@@ -7,8 +7,8 @@ import urllib.parse
 from elevenlabs.client import ElevenLabs
 
 def check_in(event):
-    api_gateway_url = os.environ.get('API_GATEWAY_URL', 'https://1xwzsx1r0m.execute-api.us-east-1.amazonaws.com/prod/') 
-    recipient_email = os.environ["RECIPIENT_EMAIL"]
+    api_gateway_url = os.environ.get('API_GATEWAY_URL', 'https://khtpxfrk5d.execute-api.us-east-1.amazonaws.com/prod/') 
+    recipient_emails = os.environ["RECIPIENT_EMAIL"].split('|')
 
     ses_client = boto3.client("ses")
 
@@ -35,7 +35,7 @@ def check_in(event):
     ses_client.send_email(
         Source="neochen428@gmail.com",
         Destination={
-            "ToAddresses": [recipient_email]
+            "ToAddresses": recipient_emails
         },
         Message={
             "Subject": {
@@ -83,7 +83,7 @@ def data_capture(event):
 def prayer_generation(event):
     feelings_table_name = os.environ["FEELINGS_TABLE_NAME"]
     prayers_bucket_name = os.environ["PRAYERS_BUCKET_NAME"]
-    recipient_email = os.environ["RECIPIENT_EMAIL"]
+    recipient_emails = os.environ["RECIPIENT_EMAIL"].split('|')
     lookback_days = int(os.environ["LOOKBACK_DAYS"])
     elevenlabs_api_key = os.environ["ELEVENLABS_API_KEY"]
     bedrock_model_id = os.environ["BEDROCK_MODEL_ID"]
@@ -101,7 +101,7 @@ def prayer_generation(event):
         ExpressionAttributeNames={
 "#ts": "timestamp"},
         ExpressionAttributeValues={
-            ":email": recipient_email,
+            ":email": recipient_emails,
             ":start_date": start_date,
         },
     )
@@ -195,7 +195,7 @@ May peace be with you."""
     ses_client.send_email(
         Source="neochen428@gmail.com",
         Destination={
-            "ToAddresses": [recipient_email]
+            "ToAddresses": recipient_emails
         },
         Message={
             "Subject": {"Data": subject},

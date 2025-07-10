@@ -21,7 +21,7 @@ from aws_cdk import CfnOutput
 
 class AiPrayerStack(Stack):
 
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, app_config, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         # DynamoDB Table to store user's feelings
@@ -49,7 +49,7 @@ class AiPrayerStack(Stack):
         # SES Email Identity
         ses.EmailIdentity(
             self, "EmailIdentity",
-            identity=ses.Identity.email("neochen428@gmail.com")
+            identity=ses.Identity.email(app_config['send_email'])
         )
 
         # IAM Role for Lambda Functions
@@ -66,7 +66,7 @@ class AiPrayerStack(Stack):
         prayers_bucket.grant_read_write(lambda_role)
         lambda_role.add_to_policy(iam.PolicyStatement(
             actions=["ses:SendEmail", "ses:SendRawEmail"],
-            resources=["arn:aws:ses:us-east-1:471112955155:identity/neochen428@gmail.com"]
+            resources=["*"]
         ))
         lambda_role.add_to_policy(iam.PolicyStatement(
             actions=["bedrock:InvokeModel"],
@@ -86,9 +86,9 @@ class AiPrayerStack(Stack):
             environment={
                 "FEELINGS_TABLE_NAME": feelings_table.table_name,
                 "PRAYERS_BUCKET_NAME": prayers_bucket.bucket_name,
-                "RECIPIENT_EMAIL": "neochen428@gmail.com",
+                "RECIPIENT_EMAIL": '|'.join(app_config['receive_emails']),
                 "LOOKBACK_DAYS": "365",
-                "ELEVENLABS_API_KEY": "sk_54708ffcfdc1bcaaebe0b47ca643b5d984f555f861736e74",
+                "ELEVENLABS_API_KEY": app_config['elevenlab_api_key'],
                 "BEDROCK_MODEL_ID": "anthropic.claude-v2", # Placeholder
             },
         )
