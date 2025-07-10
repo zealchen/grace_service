@@ -9,6 +9,8 @@ from aws_cdk import (
     aws_events as events,
     aws_events_targets as targets,
     aws_ses as ses,
+    aws_sqs as sqs,
+    aws_lambda_event_sources as lambda_event_sources,
     RemovalPolicy,
     Duration,
 )
@@ -23,6 +25,13 @@ class AiPrayerStack(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, app_config, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        # SQS Queue for prayer requests
+        prayer_request_queue = sqs.Queue(
+            self, "PrayerRequestQueue",
+            visibility_timeout=Duration.minutes(5),
+            retention_period=Duration.days(4),
+        )
 
         # DynamoDB Table to store user's feelings
         feelings_table = dynamodb.Table(
@@ -64,6 +73,8 @@ class AiPrayerStack(Stack):
         # Grant permissions to the Lambda role
         feelings_table.grant_read_write_data(lambda_role)
         prayers_bucket.grant_read_write(lambda_role)
+        prayer_request_queue.grant_consume_messages(lambda_role)
+
         lambda_role.add_to_policy(iam.PolicyStatement(
             actions=["ses:SendEmail", "ses:SendRawEmail"],
             resources=["*"]
@@ -89,9 +100,17 @@ class AiPrayerStack(Stack):
                 "RECIPIENT_EMAIL": '|'.join(app_config['receive_emails']),
                 "LOOKBACK_DAYS": "365",
                 "ELEVENLABS_API_KEY": app_config['elevenlab_api_key'],
-                "BEDROCK_MODEL_ID": "anthropic.claude-v2", # Placeholder
+                "BEDROCK_MODEL_ID": "anthropic.claude-v2",
+                "PRAYER_REQUEST_QUEUE_URL": prayer_request_queue.queue_url,
+                "SEND_EMAIL": app_config['send_email'],
             },
         )
+        
+        prayer_request_queue.grant_send_messages(unified_lambda)
+        unified_lambda.add_event_source(
+            lambda_event_sources.SqsEventSource(prayer_request_queue)
+        )
+
 
         # API Gateway
         api = apigateway.LambdaRestApi(
@@ -112,7 +131,6 @@ class AiPrayerStack(Stack):
         )
 
         # Update environment with the API Gateway URL
-        # unified_lambda.add_environment("API_GATEWAY_URL", api.url)
         CfnOutput(self, "ApiEndpoint", value=api.url)
 
         # EventBridge Rules
@@ -125,7 +143,6 @@ class AiPrayerStack(Stack):
                     unified_lambda,
                     event=events.RuleTargetInput.from_object({
                         "action": "check-in",
-                        # "api_gateway_url": api.url
                     })
                 )
             ]
@@ -138,7 +155,7 @@ class AiPrayerStack(Stack):
             targets=[
                 targets.LambdaFunction(
                     unified_lambda,
-                    event=events.RuleTargetInput.from_object({"action": "prayer-generation"})
+                    event=events.RuleTargetInput.from_object({"action": "prayer-generation-dispatch"})
                 )
             ]
         )
@@ -150,7 +167,7 @@ class AiPrayerStack(Stack):
             targets=[
                 targets.LambdaFunction(
                     unified_lambda,
-                    event=events.RuleTargetInput.from_object({"action": "prayer-generation"})
+                    event=events.RuleTargetInput.from_object({"action": "prayer-generation-dispatch"})
                 )
             ]
         )

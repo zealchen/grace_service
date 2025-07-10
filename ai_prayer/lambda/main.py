@@ -2,13 +2,18 @@ import os
 import boto3
 import json
 import tempfile
+import logging
 from datetime import datetime, timedelta
 import urllib.parse
 from elevenlabs.client import ElevenLabs
+LOGGER = logging.getLogger()
+LOGGER.setLevel(logging.INFO)
+
 
 def check_in(event):
     api_gateway_url = os.environ.get('API_GATEWAY_URL', 'https://khtpxfrk5d.execute-api.us-east-1.amazonaws.com/prod/') 
     recipient_emails = os.environ["RECIPIENT_EMAIL"].split('|')
+    send_email = os.environ["SEND_EMAIL"]
 
     ses_client = boto3.client("ses")
 
@@ -32,25 +37,26 @@ def check_in(event):
         </html>
     """
 
-    ses_client.send_email(
-        Source="neochen428@gmail.com",
-        Destination={
-            "ToAddresses": recipient_emails
-        },
-        Message={
-            "Subject": {
-                "Data": subject
+    for email in recipient_emails:
+        ses_client.send_email(
+            Source=send_email,
+            Destination={
+                "ToAddresses": [email]
             },
-            "Body": {
-                "Text": {
-                    "Data": body_text
+            Message={
+                "Subject": {
+                    "Data": subject
                 },
-                "Html": {
-                    "Data": body_html
+                "Body": {
+                    "Text": {
+                        "Data": body_text
+                    },
+                    "Html": {
+                        "Data": body_html
+                    }
                 }
             }
-        }
-    )
+        )
 
     return {"statusCode": 200, "body": "Email sent successfully!"}
 
@@ -80,13 +86,40 @@ def data_capture(event):
         "body": "<html><body><h1>Thank you for sharing!</h1></body></html>",
     }
 
-def prayer_generation(event):
+def prayer_generation_dispatch(event):
+    """
+    Dispatches prayer generation requests to SQS for each recipient.
+    """
+    recipient_emails = os.environ["RECIPIENT_EMAIL"].split('|')
+    queue_url = os.environ["PRAYER_REQUEST_QUEUE_URL"]
+    sqs_client = boto3.client("sqs")
+
+    for email in recipient_emails:
+        message_body = json.dumps({"recipient_email": email})
+        sqs_client.send_message(
+            QueueUrl=queue_url,
+            MessageBody=message_body
+        )
+        LOGGER.info(f"Dispatched prayer request for {email}")
+
+    return {"statusCode": 200, "body": "Prayer requests dispatched."}
+
+
+def prayer_generation_process(event):
+    """
+    Generates and sends a prayer for a single recipient from an SQS message.
+    """
+    message = json.loads(event['Records'][0]['body'])
+    recipient_email = message['recipient_email']
+    
+    LOGGER.info(f"Processing prayer for {recipient_email}")
+
     feelings_table_name = os.environ["FEELINGS_TABLE_NAME"]
     prayers_bucket_name = os.environ["PRAYERS_BUCKET_NAME"]
-    recipient_emails = os.environ["RECIPIENT_EMAIL"].split('|')
     lookback_days = int(os.environ["LOOKBACK_DAYS"])
     elevenlabs_api_key = os.environ["ELEVENLABS_API_KEY"]
     bedrock_model_id = os.environ["BEDROCK_MODEL_ID"]
+    send_email = os.environ["SEND_EMAIL"]
 
     elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
     
@@ -101,7 +134,7 @@ def prayer_generation(event):
         ExpressionAttributeNames={
 "#ts": "timestamp"},
         ExpressionAttributeValues={
-            ":email": recipient_emails,
+            ":email": recipient_email,
             ":start_date": start_date,
         },
     )
@@ -145,10 +178,10 @@ def prayer_generation(event):
     )
     audio_bytes = b"".join(audio)
     
-    # # 4. Store the audio in S3
+    # 4. Store the audio in S3
     s3_client = boto3.client("s3")
     file_name = f"prayer-{datetime.utcnow().isoformat()}.mp3"
-    s3_key = f"prayers/{file_name}"
+    s3_key = f"prayers/{recipient_email}/{file_name}"
     
     with tempfile.TemporaryDirectory() as temp_dir:
         audio_path = os.path.join(temp_dir, file_name)
@@ -156,7 +189,7 @@ def prayer_generation(event):
             f.write(audio_bytes)
         s3_client.upload_file(audio_path, prayers_bucket_name, s3_key, ExtraArgs={
             "ContentType": "audio/mp3",
-            "ContentDisposition": "inline"  # 👈 关键：允许内嵌播放
+            "ContentDisposition": "inline"
         })
 
     # Generate a pre-signed URL
@@ -193,9 +226,9 @@ May peace be with you."""
     """
 
     ses_client.send_email(
-        Source="neochen428@gmail.com",
+        Source=send_email,
         Destination={
-            "ToAddresses": recipient_emails
+            "ToAddresses": [recipient_email]
         },
         Message={
             "Subject": {"Data": subject},
@@ -206,10 +239,15 @@ May peace be with you."""
         }
     )
 
-    return {"statusCode": 200, "body": "Prayer generated and sent successfully!"}
+    return {"statusCode": 200, "body": f"Prayer generated and sent to {recipient_email}"}
+
 
 def handler(event, context):
     
+    # Check if the invocation is from SQS
+    if "Records" in event and event["Records"][0]["eventSource"] == "aws:sqs":
+        return prayer_generation_process(event)
+
     # If the event is from API Gateway, the body will be a string
     # that needs to be parsed.
     if "body" in event and isinstance(event["body"], str):
@@ -230,7 +268,7 @@ def handler(event, context):
         return check_in(event)
     elif action == "data-capture":
         return data_capture(event)
-    elif action == "prayer-generation":
-        return prayer_generation(event)
+    elif action == "prayer-generation-dispatch":
+        return prayer_generation_dispatch(event)
     else:
         return {"statusCode": 400, "body": f"Invalid action: {action}"}
