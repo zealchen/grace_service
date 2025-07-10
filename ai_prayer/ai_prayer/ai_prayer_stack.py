@@ -134,11 +134,14 @@ class AiPrayerStack(Stack):
         # Update environment with the API Gateway URL
         CfnOutput(self, "ApiEndpoint", value=api.url)
 
-        # EventBridge Rules
-        # 4:00 PM Check-in
+        # EventBridge Rules with Central Time adjustments
+        # Note: EventBridge uses UTC, so we adjust the hours accordingly
+
+        # 4:00 PM Central Time = 21:00 UTC (during CDT) or 22:00 UTC (during CST)
+        # Using 21:00 UTC for Daylight Saving Time (March - November)
         events.Rule(
             self, "CheckInRule",
-            schedule=events.Schedule.cron(minute="0", hour="16"),
+            schedule=events.Schedule.expression("cron(0 21 * * ? *)"),  # 4:00 PM CDT = 21:00 UTC
             targets=[
                 targets.LambdaFunction(
                     unified_lambda,
@@ -149,10 +152,11 @@ class AiPrayerStack(Stack):
             ]
         )
 
-        # 7:00 AM Prayer
+        # 7:00 AM Central Time = 12:00 UTC (during CDT) or 13:00 UTC (during CST)
+        # Using 12:00 UTC for Daylight Saving Time
         events.Rule(
             self, "MorningPrayerRule",
-            schedule=events.Schedule.cron(minute="0", hour="7"),
+            schedule=events.Schedule.expression("cron(0 12 * * ? *)"),  # 7:00 AM CDT = 12:00 UTC
             targets=[
                 targets.LambdaFunction(
                     unified_lambda,
@@ -161,10 +165,11 @@ class AiPrayerStack(Stack):
             ]
         )
 
-        # 10:00 PM Prayer
+        # 10:00 PM Central Time = 03:00 UTC next day (during CDT) or 04:00 UTC next day (during CST)
+        # Using 03:00 UTC for Daylight Saving Time
         events.Rule(
             self, "EveningPrayerRule",
-            schedule=events.Schedule.cron(minute="0", hour="22"),
+            schedule=events.Schedule.expression("cron(0 3 * * ? *)"),  # 10:00 PM CDT = 03:00 UTC next day
             targets=[
                 targets.LambdaFunction(
                     unified_lambda,
