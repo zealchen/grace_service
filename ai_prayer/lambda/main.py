@@ -4,6 +4,9 @@ import json
 import tempfile
 import logging
 import openai
+import requests
+from bs4 import BeautifulSoup
+from datetime import date
 from pathlib import Path
 from datetime import datetime, timedelta
 import urllib.parse
@@ -11,6 +14,35 @@ from elevenlabs.client import ElevenLabs
 from llm import invoke_model
 LOGGER = logging.getLogger()
 LOGGER.setLevel(logging.INFO)
+
+
+def get_today_gospel():
+    today = date.today().isoformat()
+    url = f"https://bible.usccb.org/daily-bible-reading?date={today}"
+    
+    response = requests.get(url)
+    if response.status_code != 200:
+        return f"Failed to fetch data: {response.status_code}"
+
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+    # Find all the reading blocks
+    readings = soup.find_all('div', class_='b-verse')
+    
+    for reading in readings:
+        # Find the title of the reading
+        title_tag = reading.find('h3', class_='name')
+        
+        if title_tag and 'Gospel' in title_tag.text:
+            gospel_title = title_tag.text.strip()
+            
+            # Find the content of the reading
+            content_body = reading.find('div', class_='content-body')
+            if content_body:
+                gospel_text = content_body.get_text(separator="\n").strip()
+                return f"{gospel_title}\n\n{gospel_text}"
+
+    return ""
 
 
 def check_in(event):
@@ -162,14 +194,22 @@ def prayer_generation_process(event):
     recent_activities = feelings[:-1]
     last_day_feeling = feelings[-1]
     
+    gospel = get_today_gospel()
+    
     prompt = f"""
     First, here are the recent activities of a person: {', '.join(recent_activities)}.
     Summarize these activities to understand the character of this person.
 
-    Next, based on this character, and knowing that the person is feeling '{last_day_feeling}' today,
-    please generate a deep, reflective, and personal prayer.
+    Next, based on this character, and knowing whats the person is feeling today:
+    
+    {last_day_feeling}
+    
+    please generate a deep, reflective, and personal prayer based on today's gospel:
+    
+    {gospel}
+    
     The prayer should be structured to last for approximately 2 - 3 minutes when spoken aloud at a calm, meditative pace.
-    This means the prayer should be around 250 to 300 words long. The output prayer shall be in one single paragraph without titles.
+    This means the prayer should be around 250 to 300 words long. The output prayer shall be in one single paragraph without titles and do not give explanations.
     """
     LOGGER.info(f'prompt: {prompt}')
     prayer_text = invoke_model(bedrock_runtime_client, bedrock_model_id, prompt, max_tokens=800)
