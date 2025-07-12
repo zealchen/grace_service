@@ -32,6 +32,7 @@ def check_in(event):
                 <h1>How are you feeling today?</h1>
                 <p>{body_text}</p>
                 <form action="{api_gateway_url}feelings" method="POST">
+                    <input type="hidden" name="email" value="{email}">
                     <textarea name="feeling" rows="4" cols="50"></textarea>
                     <br>
                     <input type="submit" value="Submit">
@@ -73,11 +74,19 @@ def data_capture(event):
     decoded_body = urllib.parse.unquote_plus(body)
     
     # The feeling is in the format "feeling=..."
-    feeling = decoded_body.split("=")[1]
+    form_data = {field.split("=")[0]: field.split("=")[1] for field in decoded_body.split("&")}
+    feeling = form_data.get("feeling")
+    email = form_data.get("email")
+
+    if not email or not feeling:
+        return {
+            "statusCode": 400,
+            "body": "Missing email or feeling in form data."
+        }
 
     table.put_item(
         Item={
-            "email": "neochen428@gmail.com",
+            "email": email,
             "timestamp": datetime.utcnow().isoformat(),
             "feeling": feeling,
         }
@@ -136,8 +145,7 @@ def prayer_generation_process(event):
     
     response = table.query(
         KeyConditionExpression="email = :email AND #ts > :start_date",
-        ExpressionAttributeNames={
-"#ts": "timestamp"},
+        ExpressionAttributeNames={"#ts": "timestamp"},
         ExpressionAttributeValues={
             ":email": recipient_email,
             ":start_date": start_date,
@@ -151,11 +159,16 @@ def prayer_generation_process(event):
     # 2. Generate a prayer using Bedrock
     bedrock_runtime_client = boto3.client("bedrock-runtime")
     
+    recent_activities = feelings[:-1]
+    last_day_feeling = feelings[-1]
+    
     prompt = f"""
-    Based on the following recent feelings and activities from the past year: {', '.join(feelings)}.
+    First, here are the recent activities of a person: {', '.join(recent_activities)}.
+    Summarize these activities to understand the character of this person.
 
-    Please generate a deep, reflective, and personal prayer. 
-    The prayer should be structured to last for approximately 2 - 3 minutes when spoken aloud at a calm, meditative pace. 
+    Next, based on this character, and knowing that the person is feeling '{last_day_feeling}' today,
+    please generate a deep, reflective, and personal prayer.
+    The prayer should be structured to last for approximately 2 - 3 minutes when spoken aloud at a calm, meditative pace.
     This means the prayer should be around 250 to 300 words long. The output prayer shall be in one single paragraph without titles.
     """
     LOGGER.info(f'prompt: {prompt}')
