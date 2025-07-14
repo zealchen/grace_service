@@ -1,5 +1,8 @@
 import re
 import json
+import logging
+LOGGER = logging.getLogger()
+LOGGER.setLevel(logging.INFO)
 
 
 def format_result(content, type='json'):
@@ -125,6 +128,7 @@ def invoke_model(client, model_id, prompt, max_tokens=20000, attachment=None, te
                 'temperature': temperature
             }
         )
+        LOGGER.info(f'response: {response}')
         response_content = response['output']['message'].pop('content')
         return response_content[0]['text']
     elif model_id.find('llama') != -1:

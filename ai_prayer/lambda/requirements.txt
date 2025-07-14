@@ -1,3 +1,4 @@
 elevenlabs
 requests
 openai
+bs4
