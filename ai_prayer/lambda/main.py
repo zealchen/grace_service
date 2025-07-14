@@ -11,6 +11,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import urllib.parse
 from elevenlabs.client import ElevenLabs
+from pydub import AudioSegment
 from llm import invoke_model
 LOGGER = logging.getLogger()
 LOGGER.setLevel(logging.INFO)
@@ -227,7 +228,7 @@ def prayer_generation_process(event):
     The final output rule:
     1. First paragraph.
         a. It begin with the sentence: "Let's first look at God's word:"
-        b. It starts with a quota from Bible(Gospel) that could represent my latest feeling or experience.
+        b. It starts with a quota from Bible(Gospel) and a Bible story that could represent my latest feeling or experience.
         c. Then it give me some words from God to heal my heart regarding the latest suffering.
     2. Second paragraph
         a. It begin with the sentence: "Now, Let's pray together."
@@ -264,12 +265,14 @@ def prayer_generation_process(event):
         with tempfile.TemporaryDirectory() as temp_dir:
             audio_path = os.path.join(temp_dir, file_name)
             with openai_client.audio.speech.with_streaming_response.create(
-                model="tts-1-hd",
+                model="gpt-4o-mini-tts",
                 voice="onyx",
                 input=prayer_text,
                 instructions=instruction,
             ) as response:
                 response.stream_to_file(audio_path)
+                
+            audio_path = merge_prayer_with_pg(audio_path)
             s3_client.upload_file(audio_path, prayers_bucket_name, s3_key, ExtraArgs={
                 "ContentType": "audio/mp3",
                 "ContentDisposition": "inline"
@@ -326,11 +329,31 @@ May peace be with you."""
     return {"statusCode": 200, "body": f"Processed {len(event['Records'])} prayer requests."}
 
 
+def merge_prayer_with_pg(prayer_path):
+    prayer = AudioSegment.from_file(prayer_path)
+    bg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bg.mp3')
+    background = AudioSegment.from_file(bg_path)
+    if len(background) < len(prayer):
+        background = background * (len(prayer) // len(background) + 1)
+
+    background = background[:len(prayer)]
+    combined = prayer.overlay(background)
+    
+    prefix, ext = os.path.splitext(prayer_path)
+    final_path = f'{prefix}_bg1{ext}'
+    combined.export(final_path, format="mp3")
+    return final_path
+
+
 def handler(event, context):
     
     # Check if the invocation is from SQS
     if "Records" in event and event["Records"][0]["eventSource"] == "aws:sqs":
-        return prayer_generation_process(event)
+        try:
+            prayer_generation_process(event)
+        except Exception as e:
+            LOGGER.error(f"execute for {event} failed.")
+            return ''
 
     # If the event is from API Gateway, the body will be a string
     # that needs to be parsed.

@@ -2,3 +2,4 @@ elevenlabs
 requests
 openai
 bs4
+pydub
