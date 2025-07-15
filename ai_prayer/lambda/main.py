@@ -336,6 +336,7 @@ def email_capture(event):
         if match:
             sender_email = match.group(0)
         
+        feeling = ""
         if msg.is_multipart():
             for part in msg.walk():
                 content_type = part.get_content_type()
@@ -344,6 +345,9 @@ def email_capture(event):
                     break
         else:
             feeling = msg.get_payload(decode=True).decode('utf-8')
+
+        # Remove quoted reply
+        feeling = '\n'.join([line for line in feeling.splitlines() if not line.strip().startswith('>')])
 
         if sender_email and feeling:
             table.put_item(
