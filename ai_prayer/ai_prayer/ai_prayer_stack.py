@@ -9,6 +9,7 @@ from aws_cdk import (
     aws_events as events,
     aws_events_targets as targets,
     aws_ses as ses,
+    aws_ses_actions as ses_actions,
     aws_sqs as sqs,
     aws_lambda_event_sources as lambda_event_sources,
     RemovalPolicy,
@@ -113,27 +114,6 @@ class AiPrayerStack(Stack):
         )
 
 
-        # API Gateway
-        api = apigateway.LambdaRestApi(
-            self, "ApiGateway",
-            handler=unified_lambda,
-            proxy=False
-        )
-
-        feelings = api.root.add_resource("feelings")
-        feelings.add_method(
-            "POST",
-            apigateway.LambdaIntegration(
-                unified_lambda,
-                request_templates={
-                    "application/x-www-form-urlencoded": '{ "action": "data-capture", "body": $input.body }'
-                }
-            )
-        )
-
-        # Update environment with the API Gateway URL
-        CfnOutput(self, "ApiEndpoint", value=api.url)
-
         # EventBridge Rules with Central Time adjustments
         # Note: EventBridge uses UTC, so we adjust the hours accordingly
 
@@ -177,3 +157,75 @@ class AiPrayerStack(Stack):
                 )
             ]
         )
+
+        # S3 bucket to store incoming emails
+        email_bucket = s3.Bucket(
+            self, "EmailBucket",
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+        )
+
+        # Grant the unified lambda permissions to read from the email bucket
+        email_bucket.grant_read(unified_lambda.role)
+
+        # Add S3 event source to the unified lambda
+        unified_lambda.add_event_source(
+            lambda_event_sources.S3EventSource(
+                email_bucket,
+                events=[s3.EventType.OBJECT_CREATED]
+            )
+        )
+
+        # SES Receipt Rule Set
+        rule_set = ses.ReceiptRuleSet(
+            self, "ReceiptRuleSet",
+            receipt_rule_set_name="ActiveRuleSet",
+            drop_spam=True
+        )
+
+        rule_set.add_rule(
+            "ProcessEmailRule",
+            recipients=[app_config['send_email']],
+            actions=[
+                ses_actions.S3(
+                    bucket=email_bucket,
+                    object_key_prefix="emails/",
+                )
+            ],
+            enabled=True
+        )
+        
+        # 激活 Rule Set
+        from aws_cdk import custom_resources as cr
+
+        # 创建自定义资源来激活 Rule Set
+        activate_rule_set = cr.AwsCustomResource(
+            self, "ActivateRuleSet",
+            on_create=cr.AwsSdkCall(
+                service="SES",
+                action="setActiveReceiptRuleSet",
+                parameters={
+                    "RuleSetName": rule_set.receipt_rule_set_name
+                },
+                physical_resource_id=cr.PhysicalResourceId.of('ActivateSESRuleSet'),
+                region=self.region
+            ),
+            on_delete=cr.AwsSdkCall(
+                service="SES", 
+                action="setActiveReceiptRuleSet",
+                parameters={},  # 空参数会取消激活
+                region=self.region
+            ),
+            policy=cr.AwsCustomResourcePolicy.from_statements([
+                iam.PolicyStatement(
+                    actions=["ses:SetActiveReceiptRuleSet"],
+                    resources=["*"]
+                )
+            ])
+        )
+
+        # 确保在 rule set 创建后再激活
+        activate_rule_set.node.add_dependency(rule_set)
+
+        # Add environment variable for the email bucket
+        unified_lambda.add_environment("EMAIL_BUCKET_NAME", email_bucket.bucket_name)

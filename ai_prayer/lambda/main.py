@@ -1,4 +1,5 @@
 import os
+import re
 import boto3
 import json
 import tempfile
@@ -47,7 +48,6 @@ def get_today_gospel():
 
 
 def check_in(event):
-    api_gateway_url = os.environ.get('API_GATEWAY_URL', 'https://khtpxfrk5d.execute-api.us-east-1.amazonaws.com/prod/') 
     recipient_emails = os.environ["RECIPIENT_EMAIL"].split('|')
     send_email = os.environ["SEND_EMAIL"]
 
@@ -55,7 +55,7 @@ def check_in(event):
 
     subject = "How are you feeling today?"
     body_text = (
-        "Click the link to let me know how you are feeling today. "
+        "Simply reply to this email with how you are feeling today. "
         "This will help me customize your evening prayer."
     )
 
@@ -65,13 +65,8 @@ def check_in(event):
                 <head></head>
                 <body>
                     <h1>How are you feeling today?</h1>
-                    <p>{body_text}</p>
-                    <form action="{api_gateway_url}feelings" method="POST">
-                        <input type="hidden" name="email" value="{email}">
-                        <textarea name="feeling" rows="4" cols="50"></textarea>
-                        <br>
-                        <input type="submit" value="Submit">
-                    </form>
+                    <p>Simply reply to this email with how you are feeling today.</p>
+                    <p>This will help me customize your evening prayer.</p>
                 </body>
             </html>
         """
@@ -97,39 +92,7 @@ def check_in(event):
 
     return {"statusCode": 200, "body": "Email sent successfully!"}
 
-def data_capture(event):
-    feelings_table_name = os.environ["FEELINGS_TABLE_NAME"]
-    dynamodb_client = boto3.resource("dynamodb")
-    table = dynamodb_client.Table(feelings_table_name)
 
-    # The body of the request is a URL-encoded string
-    body = event.get("body", "")
-    decoded_body = urllib.parse.unquote_plus(body)
-    
-    # The feeling is in the format "feeling=..."
-    form_data = {field.split("=")[0]: field.split("=")[1] for field in decoded_body.split("&")}
-    feeling = form_data.get("feeling")
-    email = form_data.get("email")
-
-    if not email or not feeling:
-        return {
-            "statusCode": 400,
-            "body": "Missing email or feeling in form data."
-        }
-
-    table.put_item(
-        Item={
-            "email": email,
-            "timestamp": datetime.utcnow().isoformat(),
-            "feeling": feeling,
-        }
-    )
-
-    return {
-        "statusCode": 200,
-        "headers": {"Content-Type": "text/html"},
-        "body": "<html><body><h1>Thank you for sharing!</h1></body></html>",
-    }
 
 def prayer_generation_dispatch(event):
     """
@@ -345,37 +308,77 @@ def merge_prayer_with_pg(prayer_path):
     return final_path
 
 
+def email_capture(event):
+    """
+    Processes an email from S3, extracts the feeling, and saves it to DynamoDB.
+    """
+    s3_client = boto3.client("s3")
+    dynamodb_client = boto3.resource("dynamodb")
+    feelings_table_name = os.environ["FEELINGS_TABLE_NAME"]
+    table = dynamodb_client.Table(feelings_table_name)
+
+    for record in event['Records']:
+        s3_bucket = record['s3']['bucket']['name']
+        s3_key = record['s3']['object']['key']
+
+        # Get the email from S3
+        response = s3_client.get_object(Bucket=s3_bucket, Key=s3_key)
+        email_content = response['Body'].read().decode('utf-8')
+
+        # A simple way to parse the email
+        # For more robust parsing, consider using a library like 'mail-parser'
+        from email import message_from_string
+        msg = message_from_string(email_content)
+
+        # Neo Chen <neochen428@gmail.com>
+        sender_email = msg['From']
+        match = re.search(r'[\w\.-]+@[\w\.-]+', sender_email)
+        if match:
+            sender_email = match.group(0)
+        
+        if msg.is_multipart():
+            for part in msg.walk():
+                content_type = part.get_content_type()
+                if content_type == 'text/plain':
+                    feeling = part.get_payload(decode=True).decode('utf-8')
+                    break
+        else:
+            feeling = msg.get_payload(decode=True).decode('utf-8')
+
+        if sender_email and feeling:
+            table.put_item(
+                Item={
+                    "email": sender_email,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "feeling": feeling.strip(),
+                }
+            )
+            LOGGER.info(f"Captured feeling from {sender_email}")
+
+    return {"statusCode": 200, "body": "Email processed successfully."}
+
+
 def handler(event, context):
     
+    # Check if the invocation is from S3 (for email capture)
+    if "Records" in event and event["Records"][0]["eventSource"] == "aws:s3":
+        return email_capture(event)
+
     # Check if the invocation is from SQS
     if "Records" in event and event["Records"][0]["eventSource"] == "aws:sqs":
         try:
-            prayer_generation_process(event)
+            return prayer_generation_process(event)
         except Exception as e:
             LOGGER.error(f"execute for {event} failed.")
             return ''
 
-    # If the event is from API Gateway, the body will be a string
-    # that needs to be parsed.
-    if "body" in event and isinstance(event["body"], str):
-        try:
-            body = json.loads(event["body"])
-            action = body.get("action")
-        except json.JSONDecodeError:
-            # If the body is not a JSON string, it might be a URL-encoded string
-            decoded_body = urllib.parse.unquote_plus(event["body"])
-            if "feeling=" in decoded_body:
-                action = "data-capture"
-            else:
-                action = None
-    else:
-        action = event.get("action")
+    # Check for actions from EventBridge
+    action = event.get("action")
 
     if action == "check-in":
         return check_in(event)
-    elif action == "data-capture":
-        return data_capture(event)
     elif action == "prayer-generation-dispatch":
         return prayer_generation_dispatch(event)
     else:
-        return {"statusCode": 400, "body": f"Invalid action: {action}"}
+        LOGGER.error(f"Unknown event: {event}")
+        return {"statusCode": 400, "body": f"Invalid action or event source."}
