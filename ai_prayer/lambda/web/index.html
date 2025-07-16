@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Prayer Companion</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600&family=Poppins:wght@300;400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="hero-section text-center text-white py-5">
+        <div class="container">
+            <h1 class="display-4">Find Peace in Daily Prayer</h1>
+            <p class="lead">Receive a personalized prayer reflection, crafted from your own thoughts and the day's Gospel, delivered to you every evening.</p>
+        </div>
+    </header>
+
+    <main class="container my-5">
+        <section id="how-it-works" class="text-center mb-5">
+            <h2 class="section-title">How It Works</h2>
+            <div class="row mt-4">
+                <div class="col-md-4">
+                    <div class="step-card p-4">
+                        <div class="step-icon mb-3">1</div>
+                        <h3>Share Your Heart</h3>
+                        <p>Each day, you'll receive an email with a private link to share what's on your mind. No logins, just a quiet space for your thoughts.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="step-card p-4">
+                        <div class="step-icon mb-3">2</div>
+                        <h3>AI-Powered Reflection</h3>
+                        <p>Our system meditates on your words, connecting them with the daily Gospel to compose a unique prayer that speaks to your experience.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="step-card p-4">
+                        <div class="step-icon mb-3">3</div>
+                        <h3>Listen and Reflect</h3>
+                        <p>Receive your prayer as a beautiful audio recording with calming background music, ready for you to listen to and find peace.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="signup" class="signup-section text-center p-5 rounded">
+            <h2 class="mb-4">Begin Your Journey</h2>
+            <p class="lead mb-4">Enter your email below to start receiving your daily check-in and personalized prayer.</p>
+            <form id="signup-form" class="row justify-content-center">
+                <div class="col-md-6">
+                    <input type="email" id="email-input" class="form-control form-control-lg" placeholder="your.email@example.com" required>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary btn-lg w-100">Start My Journey</button>
+                </div>
+            </form>
+            <div id="form-message" class="mt-4"></div>
+        </section>
+    </main>
+
+    <footer class="text-center py-4">
+        <p>&copy; 2025 AI Prayer. All rights reserved.</p>
+    </footer>
+
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

@@ -14,8 +14,18 @@ import urllib.parse
 from elevenlabs.client import ElevenLabs
 from pydub import AudioSegment
 from llm import invoke_model
+import uuid
+
+
 LOGGER = logging.getLogger()
 LOGGER.setLevel(logging.INFO)
+
+dynamodb_client = boto3.resource("dynamodb")
+ses_client = boto3.client("ses")
+
+USERS_TABLE = dynamodb_client.Table(os.environ["USERS_TABLE_NAME"])
+FEELINGS_TABLE = dynamodb_client.Table(os.environ["FEELINGS_TABLE_NAME"])
+SEND_EMAIL = os.environ["SEND_EMAIL"]
 
 
 def get_today_gospel():
@@ -47,62 +57,144 @@ def get_today_gospel():
     return ""
 
 
-def check_in(event):
-    recipient_emails = os.environ["RECIPIENT_EMAIL"].split('|')
-    send_email = os.environ["SEND_EMAIL"]
-
-    ses_client = boto3.client("ses")
-
-    subject = "How are you feeling today?"
-    body_text = (
-        "Simply reply to this email with how you are feeling today. "
-        "This will help me customize your evening prayer."
+def signup(event):
+    body = json.loads(event['body'])
+    email = body['email']
+    
+    verification_token = str(uuid.uuid4())
+    
+    USERS_TABLE.put_item(
+        Item={
+            'email': email,
+            'verified': False,
+            'verification_token': verification_token
+        }
     )
+    
+    # Construct the verification link using the API Gateway URL from the event
+    # This is passed in from the EventBridge rule
+    api_gateway_url = event.get('api_gateway_url', f"https://{event['requestContext']['domainName']}/{event['requestContext']['stage']}")
+    verification_link = f"{api_gateway_url}/verify?email={urllib.parse.quote(email)}&token={verification_token}"
+    
+    ses_client.send_email(
+        Source=SEND_EMAIL,
+        Destination={'ToAddresses': [email]},
+        Message={
+            'Subject': {'Data': "Verify your email for AI Prayer Companion"},
+            'Body': {
+                'Html': {
+                    'Data': f"""
+                        <p>Thank you for signing up! Please click the link below to verify your email address:</p>
+                        <a href="{verification_link}">Verify Email</a>
+                    """
+                }
+            }
+        }
+    )
+    
+    return {
+        'statusCode': 200,
+        'headers': {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'
+        },
+        'body': json.dumps({'message': 'Verification email sent.'})
+    }
 
-    for email in recipient_emails:
-        body_html = f"""
-            <html>
-                <head></head>
-                <body>
-                    <h1>How are you feeling today?</h1>
-                    <p>Simply reply to this email with how you are feeling today.</p>
-                    <p>This will help me customize your evening prayer.</p>
-                </body>
-            </html>
-        """
+
+def verify(event):
+    email = event['queryStringParameters']['email']
+    token = event['queryStringParameters']['token']
+    
+    response = USERS_TABLE.get_item(Key={'email': email})
+    user = response.get('Item')
+    
+    if user and user.get('verification_token') == token:
+        USERS_TABLE.update_item(
+            Key={'email': email},
+            UpdateExpression="set verified = :v",
+            ExpressionAttributeValues={':v': True}
+        )
+        return {
+            'statusCode': 200,
+            'headers': {'Content-Type': 'text/html'},
+            'body': "<h1>Email verified successfully!</h1><p>You will now receive daily prayer check-ins.</p>"
+        }
+    
+    return {
+        'statusCode': 400,
+        'headers': {'Content-Type': 'text/html'},
+        'body': "<h1>Invalid verification link.</h1>"
+    }
+
+
+def journal(event):
+    body = json.loads(event['body'])
+    email = body['email']
+    feeling = body['feeling']
+    
+    FEELINGS_TABLE.put_item(
+        Item={
+            'email': email,
+            'timestamp': datetime.utcnow().isoformat(),
+            'feeling': feeling
+        }
+    )
+    
+    return {
+        'statusCode': 200,
+        'headers': {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'
+        },
+        'body': json.dumps({'message': 'Journal entry saved.'})
+    }
+
+
+def check_in(event):
+    web_bucket_url = event.get('web_bucket_url')
+    if not web_bucket_url:
+        LOGGER.error("web_bucket_url not found in event")
+        return {"statusCode": 500, "body": "web_bucket_url not configured"}
+
+    response = USERS_TABLE.scan(FilterExpression="verified = :v", ExpressionAttributeValues={':v': True})
+    users = response.get('Items', [])
+    
+    for user in users:
+        email = user['email']
+        journal_link = f"{web_bucket_url}/journal.html?email={urllib.parse.quote(email)}"
+        
         ses_client.send_email(
-            Source=send_email,
-            Destination={
-                "ToAddresses": [email]
-            },
+            Source=SEND_EMAIL,
+            Destination={'ToAddresses': [email]},
             Message={
-                "Subject": {
-                    "Data": subject
-                },
-                "Body": {
-                    "Text": {
-                        "Data": body_text
-                    },
-                    "Html": {
-                        "Data": body_html
+                'Subject': {'Data': "How are you feeling today?"},
+                'Body': {
+                    'Html': {
+                        'Data': f"""
+                            <h1>How are you feeling today?</h1>
+                            <p>Click the link below to share your thoughts and feelings for today's prayer:</p>
+                            <a href="{journal_link}">Share Your Feelings</a>
+                        """
                     }
                 }
             }
         )
-
-    return {"statusCode": 200, "body": "Email sent successfully!"}
-
+        
+    return {"statusCode": 200, "body": "Check-in emails sent."}
 
 
 def prayer_generation_dispatch(event):
-    """
-    Dispatches prayer generation requests to SQS for each recipient.
-    """
-    recipient_emails = os.environ["RECIPIENT_EMAIL"].split('|')
     queue_url = os.environ["PRAYER_REQUEST_QUEUE_URL"]
     sqs_client = boto3.client("sqs")
+    
+    response = USERS_TABLE.scan(FilterExpression="verified = :v", ExpressionAttributeValues={':v': True})
+    users = response.get('Items', [])
 
-    for email in recipient_emails:
+    for user in users:
+        email = user['email']
         message_body = json.dumps({"recipient_email": email})
         sqs_client.send_message(
             QueueUrl=queue_url,
@@ -114,33 +206,21 @@ def prayer_generation_dispatch(event):
 
 
 def prayer_generation_process(event):
-    """
-    Generates and sends a prayer for each recipient from an SQS message batch.
-    """
     for record in event['Records']:
         message = json.loads(record['body'])
         recipient_email = message['recipient_email']
         
         LOGGER.info(f"Processing prayer for {recipient_email}")
 
-        feelings_table_name = os.environ["FEELINGS_TABLE_NAME"]
         prayers_bucket_name = os.environ["PRAYERS_BUCKET_NAME"]
         lookback_days = int(os.environ["LOOKBACK_DAYS"])
-        elevenlabs_api_key = os.environ["ELEVENLABS_API_KEY"]
         openai_api_key = os.environ["OPENAI_API_KEY"]
-        bedrock_model_id = os.environ["BEDROCK_MODEL_ID"]
-        send_email = os.environ["SEND_EMAIL"]
-
-        # elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
-        openai_client = openai.OpenAI(api_key=openai_api_key)
         
-        # 1. Read user's feelings from DynamoDB
-        dynamodb_client = boto3.resource("dynamodb")
-        table = dynamodb_client.Table(feelings_table_name)
+        openai_client = openai.OpenAI(api_key=openai_api_key)
         
         start_date = (datetime.utcnow() - timedelta(days=lookback_days)).isoformat()
         
-        response = table.query(
+        response = FEELINGS_TABLE.query(
             KeyConditionExpression="email = :email AND #ts > :start_date",
             ExpressionAttributeNames={"#ts": "timestamp"},
             ExpressionAttributeValues={
@@ -153,9 +233,6 @@ def prayer_generation_process(event):
         if not feelings:
             LOGGER.info(f"no feelings found for {recipient_email}, skipping")
             continue
-        
-        # 2. Generate a prayer using Bedrock
-        bedrock_runtime_client = boto3.client("bedrock-runtime")
         
         recent_activities = feelings[:-1]
         last_day_feeling = feelings[-1]
@@ -220,7 +297,6 @@ def prayer_generation_process(event):
             "and a voice that is both awe-inspiring and calming."
         )
         
-        # 4. Store the audio in S3
         s3_client = boto3.client("s3")
         file_name = f"prayer-{datetime.utcnow().isoformat()}.mp3"
         s3_key = f"prayers/{recipient_email}/{file_name}"
@@ -241,25 +317,11 @@ def prayer_generation_process(event):
                 "ContentDisposition": "inline"
             })
 
-        # Generate a pre-signed URL
         presigned_url = s3_client.generate_presigned_url(
             "get_object",
             Params={"Bucket": prayers_bucket_name, "Key": s3_key},
             ExpiresIn=3600*24,
         )
-
-        # 5. Send an email with a link to the audio
-        ses_client = boto3.client("ses")
-        
-        subject = "Your Daily Prayer Reflection"
-        body_text = f"""Dear Friend,
-
-Your prayer for today is ready.
-
-Listen to your reflection and prayer here:
-{presigned_url}
-
-May peace be with you."""
 
         body_html = f"""
     <html>
@@ -275,16 +337,11 @@ May peace be with you."""
     """
 
         ses_client.send_email(
-            Source=send_email,
-            Destination={
-                "ToAddresses": [recipient_email]
-            },
+            Source=SEND_EMAIL,
+            Destination={"ToAddresses": [recipient_email]},
             Message={
-                "Subject": {"Data": subject},
-                "Body": {
-                    "Text": {"Data": body_text},
-                    "Html": {"Data": body_html},
-                },
+                "Subject": {"Data": "Your Daily Prayer Reflection"},
+                "Body": {"Html": {"Data": body_html}},
             }
         )
         LOGGER.info(f"Prayer generated and sent to {recipient_email}")
@@ -308,81 +365,41 @@ def merge_prayer_with_pg(prayer_path):
     return final_path
 
 
-def email_capture(event):
-    """
-    Processes an email from S3, extracts the feeling, and saves it to DynamoDB.
-    """
-    s3_client = boto3.client("s3")
-    dynamodb_client = boto3.resource("dynamodb")
-    feelings_table_name = os.environ["FEELINGS_TABLE_NAME"]
-    table = dynamodb_client.Table(feelings_table_name)
-
-    for record in event['Records']:
-        s3_bucket = record['s3']['bucket']['name']
-        s3_key = record['s3']['object']['key']
-
-        # Get the email from S3
-        response = s3_client.get_object(Bucket=s3_bucket, Key=s3_key)
-        email_content = response['Body'].read().decode('utf-8')
-
-        # A simple way to parse the email
-        # For more robust parsing, consider using a library like 'mail-parser'
-        from email import message_from_string
-        msg = message_from_string(email_content)
-
-        # Neo Chen <neochen428@gmail.com>
-        sender_email = msg['From']
-        match = re.search(r'[\w\.-]+@[\w\.-]+', sender_email)
-        if match:
-            sender_email = match.group(0)
-        
-        feeling = ""
-        if msg.is_multipart():
-            for part in msg.walk():
-                content_type = part.get_content_type()
-                if content_type == 'text/plain':
-                    feeling = part.get_payload(decode=True).decode('utf-8')
-                    break
-        else:
-            feeling = msg.get_payload(decode=True).decode('utf-8')
-
-        # Remove quoted reply
-        feeling = '\n'.join([line for line in feeling.splitlines() if not line.strip().startswith('>')])
-
-        if sender_email and feeling:
-            table.put_item(
-                Item={
-                    "email": sender_email,
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "feeling": feeling.strip(),
-                }
-            )
-            LOGGER.info(f"Captured feeling from {sender_email}")
-
-    return {"statusCode": 200, "body": "Email processed successfully."}
-
-
 def handler(event, context):
-    
-    # Check if the invocation is from S3 (for email capture)
-    if "Records" in event and event["Records"][0]["eventSource"] == "aws:s3":
-        return email_capture(event)
+    LOGGER.info(f"Received event: {json.dumps(event)}")
 
-    # Check if the invocation is from SQS
+    # API Gateway routing
+    if 'httpMethod' in event:
+        path = event['path']
+        method = event['httpMethod']
+        
+        if path == '/signup' and method == 'POST':
+            return signup(event)
+        elif path == '/verify' and method == 'GET':
+            return verify(event)
+        elif path == '/journal' and method == 'POST':
+            return journal(event)
+        elif method == 'OPTIONS':
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'
+                },
+                'body': ''
+            }
+
+    # SQS routing
     if "Records" in event and event["Records"][0]["eventSource"] == "aws:sqs":
-        try:
-            return prayer_generation_process(event)
-        except Exception as e:
-            LOGGER.error(f"execute for {event} failed.")
-            return ''
+        return prayer_generation_process(event)
 
-    # Check for actions from EventBridge
+    # EventBridge routing
     action = event.get("action")
-
     if action == "check-in":
         return check_in(event)
     elif action == "prayer-generation-dispatch":
         return prayer_generation_dispatch(event)
-    else:
-        LOGGER.error(f"Unknown event: {event}")
-        return {"statusCode": 400, "body": f"Invalid action or event source."}
+
+    LOGGER.error(f"Unknown event: {event}")
+    return {"statusCode": 400, "body": "Invalid action or event source."}

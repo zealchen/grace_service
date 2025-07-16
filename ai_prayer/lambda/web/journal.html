@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Journal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600&family=Poppins:wght@300;400&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f8f9fa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .journal-container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            max-width: 600px;
+            width: 100%;
+        }
+        h1 {
+            font-family: 'Lora', serif;
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 25px;
+        }
+        #journal-form textarea {
+            height: 150px;
+        }
+        #form-message {
+            text-align: center;
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-top: 20px;
+        }
+        .success-message { color: #198754; }
+        .error-message { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="journal-container">
+        <h1>Share Your Heart</h1>
+        <p class="text-center text-muted">Your words will shape this evening's prayer. Share what is on your mind and in your heart today.</p>
+        <form id="journal-form">
+            <input type="hidden" id="email-input">
+            <div class="mb-3">
+                <textarea id="feeling-input" class="form-control" placeholder="Tell me about your day, your joys, your struggles..." required></textarea>
+            </div>
+            <div class="d-grid">
+                <button type="submit" class="btn btn-primary btn-lg">Submit for Prayer</button>
+            </div>
+        </form>
+        <div id="form-message"></div>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="config.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const journalForm = document.getElementById('journal-form');
+            const emailInput = document.getElementById('email-input');
+            const feelingInput = document.getElementById('feeling-input');
+            const formMessage = document.getElementById('form-message');
+
+            const params = new URLSearchParams(window.location.search);
+            const email = params.get('email');
+            if (email) {
+                emailInput.value = email;
+            } else {
+                formMessage.textContent = "Error: No user identified. Please use the link from your email.";
+                formMessage.className = 'error-message';
+                journalForm.querySelector('button').disabled = true;
+            }
+
+            journalForm.addEventListener('submit', function(event) {
+                event.preventDefault();
+                
+                const feeling = feelingInput.value.trim();
+                const userEmail = emailInput.value;
+                const apiGatewayUrl = window.config.apiGatewayUrl;
+                const endpoint = `${apiGatewayUrl}/journal`;
+
+                if (feeling && userEmail && apiGatewayUrl) {
+                    fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: userEmail, feeling: feeling })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('Success:', data);
+                        formMessage.textContent = "Thank you for sharing. Your reflection has been received.";
+                        formMessage.className = 'success-message';
+                        journalForm.style.display = 'none';
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        formMessage.textContent = "Could not submit your reflection. Please try again later.";
+                        formMessage.className = 'error-message';
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

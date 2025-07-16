@@ -1,0 +1,113 @@
+/*
+ * Custom Styles for AI Prayer Landing Page
+ */
+
+/* --- Fonts and Base Styles --- */
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: #f8f9fa;
+    color: #333;
+}
+
+h1, h2, h3 {
+    font-family: 'Lora', serif;
+    font-weight: 600;
+}
+
+.section-title {
+    font-size: 2.5rem;
+    color: #2c3e50;
+    margin-bottom: 30px;
+    position: relative;
+    padding-bottom: 10px;
+}
+
+.section-title::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60px;
+    height: 3px;
+    background-color: #0d6efd;
+}
+
+
+/* --- Hero Section --- */
+.hero-section {
+    background: linear-gradient(rgba(44, 62, 80, 0.7), rgba(44, 62, 80, 0.7)), url('https://images.unsplash.com/photo-1488998527022-52f36f79b722?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=MnwzNjA3fDB8MXxwaG90by1yZWxhdGVkfDE4fHx8fHx8fDE2NzU3OTI0NTY&ixlib=rb-4.0.3&q=80&w=1080') no-repeat center center;
+    background-size: cover;
+    padding: 100px 0;
+    border-bottom: 5px solid #0d6efd;
+}
+
+.hero-section h1 {
+    font-weight: 700;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+}
+
+/* --- How It Works Section --- */
+.step-card {
+    background-color: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    height: 100%;
+}
+
+.step-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+}
+
+.step-icon {
+    width: 60px;
+    height: 60px;
+    background-color: #0d6efd;
+    color: white;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: 600;
+    font-family: 'Lora', serif;
+}
+
+/* --- Signup Section --- */
+.signup-section {
+    background-color: #e9ecef;
+    border-top: 5px solid #0d6efd;
+}
+
+.btn-primary {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+    transition: background-color 0.3s ease;
+}
+
+.btn-primary:hover {
+    background-color: #0b5ed7;
+    border-color: #0a58ca;
+}
+
+#form-message {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.success-message {
+    color: #198754;
+}
+
+.error-message {
+    color: #dc3545;
+}
+
+
+/* --- Footer --- */
+footer {
+    background-color: #2c3e50;
+    color: #ecf0f1;
+}
