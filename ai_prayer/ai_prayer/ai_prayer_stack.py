@@ -13,6 +13,10 @@ from aws_cdk import (
     aws_sqs as sqs,
     aws_lambda_event_sources as lambda_event_sources,
     aws_s3_deployment as s3_deployment,
+    aws_certificatemanager as acm,
+    aws_cloudfront as cloudfront,
+    aws_route53 as route53,
+    aws_route53_targets as route53_targets,
     RemovalPolicy,
     Duration,
     CfnOutput,
@@ -199,3 +203,40 @@ class AiPrayerStack(Stack):
         # Outputs
         CfnOutput(self, "ApiUrl", value=api.url)
         CfnOutput(self, "WebsiteUrl", value=web_bucket.bucket_website_url)
+
+        # --- Custom Domain Configuration ---
+        domain_name = "graceful.cloud"
+
+        # ACM Certificate
+        certificate = acm.Certificate(
+            self, "Certificate",
+            domain_name=domain_name,
+            validation=acm.CertificateValidation.from_dns() # This will require manual DNS validation
+        )
+
+        # CloudFront Distribution
+        distribution = cloudfront.CloudFrontWebDistribution(
+            self, "CloudFrontDistribution",
+            origin_configs=[
+                cloudfront.SourceConfiguration(
+                    s3_origin_source=cloudfront.S3OriginConfig(
+                        s3_bucket_source=web_bucket
+                    ),
+                    behaviors=[
+                        cloudfront.Behavior(
+                            is_default_behavior=True,
+                            path_pattern="/prayer/*"
+                        )
+                    ]
+                )
+            ],
+            viewer_certificate=cloudfront.ViewerCertificate.from_acm_certificate(
+                certificate,
+                aliases=[domain_name]
+            ),
+            viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+            price_class=cloudfront.PriceClass.PRICE_CLASS_100
+        )
+
+        CfnOutput(self, "DistributionDomainName", value=distribution.distribution_domain_name)
+        CfnOutput(self, "CertificateArn", value=certificate.certificate_arn)
