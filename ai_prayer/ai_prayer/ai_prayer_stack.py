@@ -211,6 +211,7 @@ class AiPrayerStack(Stack):
         certificate = acm.Certificate(
             self, "Certificate",
             domain_name=domain_name,
+            subject_alternative_names=[f"prayer.{domain_name}"],
             validation=acm.CertificateValidation.from_dns() # This will require manual DNS validation
         )
 
@@ -232,7 +233,7 @@ class AiPrayerStack(Stack):
             ],
             viewer_certificate=cloudfront.ViewerCertificate.from_acm_certificate(
                 certificate,
-                aliases=[domain_name]
+                aliases=[domain_name, f"prayer.{domain_name}"]
             ),
             viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
             price_class=cloudfront.PriceClass.PRICE_CLASS_100
