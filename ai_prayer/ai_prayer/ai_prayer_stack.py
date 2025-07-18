@@ -21,6 +21,7 @@ from aws_cdk import (
     Duration,
     CfnOutput,
 )
+from aws_cdk.aws_lambda_python_alpha import PythonFunction
 from aws_cdk.aws_lambda import Architecture
 from aws_cdk.aws_ecr_assets import Platform
 from constructs import Construct
@@ -135,6 +136,7 @@ class AiPrayerStack(Stack):
                 "LOOKBACK_DAYS": "365",
                 "OPENAI_API_KEY": app_config['openai_api_key'],
                 "SEND_EMAIL": app_config['send_email'],
+                "ADMIN_EMAIL": app_config['admin_email'],
             },
         )
 
@@ -143,6 +145,8 @@ class AiPrayerStack(Stack):
         api.root.add_resource("signup").add_method("POST", lambda_integration)
         api.root.add_resource("verify").add_method("GET", lambda_integration)
         api.root.add_resource("journal").add_method("POST", lambda_integration)
+        api.root.add_resource("unsubscribe").add_method("GET", lambda_integration)
+        api.root.add_resource("feedback").add_method("POST", lambda_integration)
 
         # SQS for prayer requests
         prayer_request_queue = sqs.Queue(
@@ -156,6 +160,26 @@ class AiPrayerStack(Stack):
         
         # Update Lambda environment with SQS URL
         unified_lambda.add_environment("PRAYER_REQUEST_QUEUE_URL", prayer_request_queue.queue_url)
+
+        # --- Unverified User Reporter Lambda ---
+        reporter_lambda = PythonFunction(
+            self, "ReporterLambda",
+            entry=os.path.join(os.path.dirname(__file__), "..", "lambda"),
+            index="unverified_user_reporter.py",
+            handler="handler",
+            runtime=_lambda.Runtime.PYTHON_3_9,
+            timeout=Duration.minutes(1),
+            environment={
+                "USERS_TABLE_NAME": users_table.table_name,
+                "ADMIN_EMAIL": app_config['admin_email'],
+                "SEND_EMAIL": app_config['send_email']
+            }
+        )
+        users_table.grant_read_data(reporter_lambda)
+        reporter_lambda.add_to_role_policy(iam.PolicyStatement(
+            actions=["ses:SendEmail"],
+            resources=["*"]
+        ))
 
         # EventBridge Rules
         check_in_rule = events.Rule(
@@ -176,8 +200,17 @@ class AiPrayerStack(Stack):
             schedule=events.Schedule.cron(minute="0", hour="12"),
             targets=[targets.LambdaFunction(
                 unified_lambda,
-                event=events.RuleTargetInput.from_object({"action": "prayer-generation-dispatch"})
+                event=events.RuleTargetInput.from_object({
+                    "action": "prayer-generation-dispatch",
+                    "api_gateway_url": api.url
+                })
             )]
+        )
+
+        reporter_rule = events.Rule(
+            self, "ReporterRule",
+            schedule=events.Schedule.cron(minute="0", hour="13"), # Runs daily at 1 PM UTC
+            targets=[targets.LambdaFunction(reporter_lambda)]
         )
 
         # Deploy web assets to S3

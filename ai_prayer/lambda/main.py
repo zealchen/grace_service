@@ -15,6 +15,7 @@ from elevenlabs.client import ElevenLabs
 from pydub import AudioSegment
 from llm import invoke_model
 import uuid
+import secrets
 
 
 LOGGER = logging.getLogger()
@@ -26,6 +27,7 @@ ses_client = boto3.client("ses")
 USERS_TABLE = dynamodb_client.Table(os.environ["USERS_TABLE_NAME"])
 FEELINGS_TABLE = dynamodb_client.Table(os.environ["FEELINGS_TABLE_NAME"])
 SEND_EMAIL = os.environ["SEND_EMAIL"]
+ADMIN_EMAIL = os.environ["ADMIN_EMAIL"]
 
 
 def get_today_gospel():
@@ -61,20 +63,20 @@ def signup(event):
     body = json.loads(event['body'])
     email = body['email']
     
-    verification_token = str(uuid.uuid4())
+    verification_token = secrets.token_urlsafe(16)
     
     USERS_TABLE.put_item(
         Item={
             'email': email,
             'verified': False,
-            'verification_token': verification_token
+            'verification_token': verification_token,
+            'subscribed_at': datetime.utcnow().isoformat()
         }
     )
     
-    # Construct the verification link using the API Gateway URL from the event
-    # This is passed in from the EventBridge rule
-    api_gateway_url = event.get('api_gateway_url', f"https://{event['requestContext']['domainName']}/{event['requestContext']['stage']}")
+    api_gateway_url = f"https://{event['requestContext']['domainName']}/{event['requestContext']['stage']}"
     verification_link = f"{api_gateway_url}/verify?email={urllib.parse.quote(email)}&token={verification_token}"
+    unsubscribe_link = f"{api_gateway_url}/unsubscribe?email={urllib.parse.quote(email)}&token={verification_token}"
     
     ses_client.send_email(
         Source=SEND_EMAIL,
@@ -86,6 +88,11 @@ def signup(event):
                     'Data': f"""
                         <p>Thank you for signing up! Please click the link below to verify your email address:</p>
                         <a href="{verification_link}">Verify Email</a>
+                        <hr>
+                        <p style="font-size: 0.8em; color: #666;">To unsubscribe, <a href="{unsubscribe_link}">click here</a>.</p>
+                        <p style="font-size: 0.8em; color: #666; text-align: center;">
+                            Visit our main page at <a href="https://prayer.graceful.cloud">prayer.graceful.cloud</a>
+                        </p>
                     """
                 }
             }
@@ -129,6 +136,35 @@ def verify(event):
     }
 
 
+def unsubscribe(event):
+    email = event['queryStringParameters']['email']
+    token = event['queryStringParameters']['token']
+
+    response = USERS_TABLE.get_item(Key={'email': email})
+    user = response.get('Item')
+
+    if user and user.get('verification_token') == token:
+        USERS_TABLE.update_item(
+            Key={'email': email},
+            UpdateExpression="set verified = :v, unsubscribed_at = :u",
+            ExpressionAttributeValues={
+                ':v': False,
+                ':u': datetime.utcnow().isoformat()
+            }
+        )
+        return {
+            'statusCode': 200,
+            'headers': {'Content-Type': 'text/html'},
+            'body': "<h1>You have been unsubscribed successfully.</h1>"
+        }
+
+    return {
+        'statusCode': 400,
+        'headers': {'Content-Type': 'text/html'},
+        'body': "<h1>Invalid unsubscribe link.</h1>"
+    }
+
+
 def journal(event):
     body = json.loads(event['body'])
     email = body['email']
@@ -153,18 +189,58 @@ def journal(event):
     }
 
 
+def handle_feedback(event):
+    body = json.loads(event['body'])
+    feedback_text = body.get('feedback')
+    user_email = body.get('email', 'Anonymous')
+
+    subject = "New Feedback Received for AI Prayer Companion"
+    body_html = f"""
+    <h3>New Feedback Received</h3>
+    <p><strong>From:</strong> {user_email}</p>
+    <p><strong>Message:</strong></p>
+    <p>{feedback_text}</p>
+    """
+
+    ses_client.send_email(
+        Source=SEND_EMAIL,
+        Destination={'ToAddresses': [ADMIN_EMAIL]},
+        Message={
+            'Subject': {'Data': subject},
+            'Body': {'Html': {'Data': body_html}}
+        }
+    )
+
+    return {
+        'statusCode': 200,
+        'headers': {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'
+        },
+        'body': json.dumps({'message': 'Feedback sent successfully.'})
+    }
+
+
 def check_in(event):
     web_bucket_url = event.get('web_bucket_url')
-    if not web_bucket_url:
-        LOGGER.error("web_bucket_url not found in event")
-        return {"statusCode": 500, "body": "web_bucket_url not configured"}
+    api_gateway_url = event.get('api_gateway_url')
+    if not web_bucket_url or not api_gateway_url:
+        LOGGER.error("web_bucket_url or api_gateway_url not found in event")
+        return {"statusCode": 500, "body": "URL not configured"}
 
     response = USERS_TABLE.scan(FilterExpression="verified = :v", ExpressionAttributeValues={':v': True})
     users = response.get('Items', [])
     
     for user in users:
         email = user['email']
+        token = user.get('verification_token')
+        if not token:
+            LOGGER.warning(f"User {email} is missing a verification token. Skipping check-in email.")
+            continue
+
         journal_link = f"{web_bucket_url}/journal.html?email={urllib.parse.quote(email)}"
+        unsubscribe_link = f"{api_gateway_url}/unsubscribe?email={urllib.parse.quote(email)}&token={token}"
         
         ses_client.send_email(
             Source=SEND_EMAIL,
@@ -177,6 +253,11 @@ def check_in(event):
                             <h1>How are you feeling today?</h1>
                             <p>Click the link below to share your thoughts and feelings for today's prayer:</p>
                             <a href="{journal_link}">Share Your Feelings</a>
+                            <hr>
+                            <p style="font-size: 0.8em; color: #666;">To unsubscribe, <a href="{unsubscribe_link}">click here</a>.</p>
+                            <p style="font-size: 0.8em; color: #666; text-align: center;">
+                                Visit our main page at <a href="https://prayer.graceful.cloud">prayer.graceful.cloud</a>
+                            </p>
                         """
                     }
                 }
@@ -189,13 +270,25 @@ def check_in(event):
 def prayer_generation_dispatch(event):
     queue_url = os.environ["PRAYER_REQUEST_QUEUE_URL"]
     sqs_client = boto3.client("sqs")
+    api_gateway_url = event.get('api_gateway_url')
+    if not api_gateway_url:
+        LOGGER.error("api_gateway_url not found in prayer_generation_dispatch event")
+        return {"statusCode": 500, "body": "api_gateway_url not configured"}
     
     response = USERS_TABLE.scan(FilterExpression="verified = :v", ExpressionAttributeValues={':v': True})
     users = response.get('Items', [])
 
     for user in users:
         email = user['email']
-        message_body = json.dumps({"recipient_email": email})
+        token = user.get('verification_token')
+        if not token:
+            LOGGER.warning(f"User {email} is missing a verification token. Skipping prayer dispatch.")
+            continue
+        message_body = json.dumps({
+            "recipient_email": email,
+            "token": token,
+            "api_gateway_url": api_gateway_url
+        })
         sqs_client.send_message(
             QueueUrl=queue_url,
             MessageBody=message_body
@@ -209,6 +302,8 @@ def prayer_generation_process(event):
     for record in event['Records']:
         message = json.loads(record['body'])
         recipient_email = message['recipient_email']
+        token = message['token']
+        api_gateway_url = message['api_gateway_url']
         
         LOGGER.info(f"Processing prayer for {recipient_email}")
 
@@ -252,7 +347,6 @@ def prayer_generation_process(event):
             input=prompt
         )
         characteristics = response.output[0].content[0].text
-        # characteristics = invoke_model(bedrock_runtime_client, bedrock_model_id, prompt, max_tokens=800)
         
         prompt = f"""
     You are a HOLY prayer creator. Based on my personality:
@@ -277,21 +371,12 @@ def prayer_generation_process(event):
     
     3. Just output those words, do not give explanations."""
         LOGGER.info(f'prompt: {prompt}')
-        # prayer_text = invoke_model(bedrock_runtime_client, bedrock_model_id, prompt, max_tokens=800)
         response = openai_client.responses.create(
             model="gpt-4.1",
             input=prompt
         )
         prayer_text = response.output[0].content[0].text
 
-        # 3. Convert the prayer to audio using ElevenLabs
-        # audio = elevenlabs_client.text_to_speech.convert(
-        #     text=prayer_text,
-        #     voice_id="A9evEp8yGjv4c3WsIKuY",
-        #     model_id="eleven_multilingual_v2",
-        #     output_format="mp3_44100_128",
-        # )
-        # audio_bytes = b"".join(audio)
         instruction = (
             "Speak as if you are God speaking directly to a beloved child—"
             "with deep authority, infinite compassion, and peaceful pace, "
@@ -324,6 +409,7 @@ def prayer_generation_process(event):
             ExpiresIn=3600*24,
         )
 
+        unsubscribe_link = f"{api_gateway_url}/unsubscribe?email={urllib.parse.quote(recipient_email)}&token={token}"
         body_html = f"""
     <html>
     <body>
@@ -332,7 +418,10 @@ def prayer_generation_process(event):
         <p>Your personal prayer reflection is ready. You may listen to it here:</p>
         <p><a href="{presigned_url}">Click to Play</a></p>
         <hr>
-        <p style="font-size: 0.8em; color: #666;">You are receiving this email because you opted in for daily prayer updates.</p>
+        <p style="font-size: 0.8em; color: #666;">You are receiving this email because you opted in for daily prayer updates. To unsubscribe, <a href="{unsubscribe_link}">click here</a>.</p>
+        <p style="font-size: 0.8em; color: #666; text-align: center;">
+            Visit our main page at <a href="https://prayer.graceful.cloud">prayer.graceful.cloud</a>
+        </p>
     </body>
     </html>
     """
@@ -369,7 +458,6 @@ def merge_prayer_with_pg(prayer_path):
 def handler(event, context):
     LOGGER.info(f"Received event: {json.dumps(event)}")
 
-    # API Gateway routing
     if 'httpMethod' in event:
         path = event['path']
         method = event['httpMethod']
@@ -378,8 +466,12 @@ def handler(event, context):
             return signup(event)
         elif path == '/verify' and method == 'GET':
             return verify(event)
+        elif path == '/unsubscribe' and method == 'GET':
+            return unsubscribe(event)
         elif path == '/journal' and method == 'POST':
             return journal(event)
+        elif path == '/feedback' and method == 'POST':
+            return handle_feedback(event)
         elif method == 'OPTIONS':
             return {
                 'statusCode': 200,
@@ -391,11 +483,9 @@ def handler(event, context):
                 'body': ''
             }
 
-    # SQS routing
     if "Records" in event and event["Records"][0]["eventSource"] == "aws:sqs":
         return prayer_generation_process(event)
 
-    # EventBridge routing
     action = event.get("action")
     if action == "check-in":
         return check_in(event)

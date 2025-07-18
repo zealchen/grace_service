@@ -33,6 +33,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 formMessage.textContent = "Thank you! Please check your email for a confirmation link to complete your subscription.";
                 formMessage.className = 'mt-4 success-message';
                 emailInput.value = '';
+
+                // Fire Google Analytics event for successful signup
+                if (typeof gtag === 'function') {
+                    gtag('event', 'sign_up', {
+                        'method': 'email'
+                    });
+                }
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -73,4 +80,63 @@ style.innerHTML = `
     }
 `;
 document.head.appendChild(style);
+
+document.addEventListener('DOMContentLoaded', function() {
+    const feedbackForm = document.getElementById('feedback-form');
+    const feedbackInput = document.getElementById('feedback-input');
+    const feedbackEmail = document.getElementById('feedback-email');
+    const feedbackMessage = document.getElementById('feedback-message');
+    const feedbackSubmitButton = feedbackForm.querySelector('button[type="submit"]');
+
+    feedbackForm.addEventListener('submit', function(event) {
+        event.preventDefault();
+
+        const feedbackText = feedbackInput.value.trim();
+        const userEmail = feedbackEmail.value.trim();
+        const apiGatewayUrl = window.config.apiGatewayUrl;
+        const endpoint = `${apiGatewayUrl}/feedback`;
+
+        if (feedbackText && apiGatewayUrl) {
+            feedbackSubmitButton.disabled = true;
+            feedbackSubmitButton.textContent = 'Sending...';
+
+            fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    feedback: feedbackText,
+                    email: userEmail
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw new Error(err.message || 'An unknown error occurred.') });
+                }
+                return response.json();
+            })
+            .then(data => {
+                feedbackMessage.textContent = "Thank you for your feedback!";
+                feedbackMessage.className = 'success-message';
+                feedbackInput.value = '';
+                feedbackEmail.value = '';
+            })
+            .catch(error => {
+                feedbackMessage.textContent = `Error: ${error.message}`;
+                feedbackMessage.className = 'error-message';
+            })
+            .finally(() => {
+                feedbackSubmitButton.disabled = false;
+                feedbackSubmitButton.textContent = 'Send Feedback';
+            });
+        } else if (!apiGatewayUrl) {
+            feedbackMessage.textContent = "API endpoint is not configured.";
+            feedbackMessage.className = 'error-message';
+        } else {
+            feedbackMessage.textContent = "Please enter your feedback before sending.";
+            feedbackMessage.className = 'error-message';
+        }
+    });
+});
 
