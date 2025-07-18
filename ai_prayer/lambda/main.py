@@ -273,6 +273,7 @@ def prayer_generation_process(event):
     2. Second paragraph
         a. It begin with the sentence: "Now, Let's pray together."
         b. It then gives a prayer of 8 to 10 sentences that begin with a thanking to God's word.
+        c. It ends with Amen.
     
     3. Just output those words, do not give explanations."""
         LOGGER.info(f'prompt: {prompt}')
